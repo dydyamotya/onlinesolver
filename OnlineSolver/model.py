@@ -5,6 +5,7 @@ import os
 
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
+    x = x.ravel()
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum(axis=0)
 
@@ -35,7 +36,7 @@ class Model(object):
             if 'config' in file:
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.config_file = pickle.load(fd)['layers']
-            elif 'layers' in file:
+            elif 'weights' in file:
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.layers_list = pickle.load(fd)
         self._CheckFiles()
@@ -52,7 +53,7 @@ class Model(object):
             """
         if not self.workable:
             return "No model", np.zeros(3)
-        answer_vector = _EvaluateNet(vector)
+        answer_vector = self._EvaluateNet(vector)
         if np.max(answer_vector) < threshold:
             return "Undefined Gas", answer_vector
         gas_index = answer_vector.argmax()
@@ -64,7 +65,8 @@ class Model(object):
 
     def _EvaluateNet(self, vector : np.array) -> np.array:
         """Evaluate answer for whole net"""
-        for i, layer in enumerate(self.config_file):
+        i = 0
+        for layer in self.config_file:
             if layer['class_name'] == 'Dropout':
             	continue
             if layer['config']['activation'] == 'sigmoid':
@@ -79,13 +81,14 @@ class Model(object):
             	raise Exception("Unknown activation function")
             weights = self.layers_list[i*2]
             biases = self.layers_list[i*2+1]
-            vector = _EvaluateLayer(vector, weights, biases, act_func)
+            vector = self._EvaluateLayer(vector, weights, biases, act_func)
+            i += 1
         return vector
 
     def _EvaluateLayer(input_vector, weights, biases, act_func):
         """Evaluate the answer from one layer"""
         return act_func(np.matmul(input_vector, weights) + biases)
 
-def CreateModel(cls, *models_paths):
+def CreateModels(models_paths):
     return [Model(model_path) for model_path in models_paths]
         

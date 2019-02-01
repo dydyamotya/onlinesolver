@@ -59,6 +59,28 @@ class ResultEvent(wx.PyEvent):
         self.SetEventType(EVT_RESULT_ID)
         self.data = data
     
+def reduce_point_number(array: np.array, window: int, shift: int = None) -> np.array:
+    """This function reduce the number of points in the scaling maner.
+    Cause of that, needed information may be lost.
+    Input:      array : 1-D np.array to convert
+                window  : int
+                shift : int
+    Returns:            1-D np.array
+    
+    Comment: shape = window * steps"""
+    data = array.copy()
+    data = data.ravel()
+    if shift:
+        if shift >= window:
+            raise Exception("Shift must be less than window")
+    else:
+        shift = 0
+    steps = data.shape[0] // window #aka number of points to return
+    to_return = np.empty((steps, ))
+    for i in range(steps):
+        to_return[i] = data[i * window + shift]
+    return to_return
+
 class Data():
     def __init__(self):
         print('Data Initialised')
@@ -78,8 +100,8 @@ class Data():
             print(a)
             return a
         else:
-            temp = np.log10(self.data[sens_num][200:550])
-            result = np.apply_along_axis(smoothing, 1, np.apply_along_axis(scalling, 1, temp), win=15)[np.newaxis, :]
+            temp = np.log10(self.data[sens_num][200:1000])
+            result = scalling(reduce_point_number(temp, 10))[np.newaxis, :]
             print(result)
             return result
 
@@ -98,7 +120,7 @@ class CalcThread(threading.Thread):
         #0 - concilium net
         #models - sensors nets
         #==================================================
-        self.model0, *self.models = model.CreateModels(*model_paths)
+        self.model0, *self.models = model.CreateModels(model_paths)
         #==================================================
         self.frame = frame
         self.stopEvent = threading.Event()
