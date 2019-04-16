@@ -84,27 +84,21 @@ def reduce_point_number(array: np.array, window: int, shift: int = None) -> np.a
 class Data():
     def __init__(self):
         print('Data Initialised')
+        self.data = np.array([])
     def take_data(self, init_data):
-        print(type(init_data))
-        #if not isinstance(init_data, np.array):
-        #    raise Exception("Wrong data, bad extention")
-        self.data = self.import_data(init_data)
+        new_data = self.import_data(init_data)
+        if self.data.shape[0] > new_data.shape[0]:
+            self.data = np.vstack([self.data[new_data.shape[0]:], new_data])
+        else:
+            self.data = np.vstack([np.zeros(new_data.shape), new_data])
+
         for i in range(4):
             np.savetxt('temp'+str(i)+'.txt', self.data[i])
     def import_data(self, data):
-        return [data[:, i+1] for i in range(7, 14, 2)]
-    def get_(self, sens_num, all_sensors=False):
-        if all_sensors:
-            a = np.hstack([sens for sens in self.data])[np.newaxis, :]
-            a = meaner(a, window=120)
-            print(a)
-            return a
-        else:
-            temp = np.log10(self.data[sens_num][200:1000])
-            result = scalling(reduce_point_number(temp, 10))[np.newaxis, :]
-            print(result)
-            return result
-
+        return [data[:, i:i+1] for i in range(7, 14, 2)]
+    def get_(self, sens_num):
+        return self.data[sens_num][450:1000].T
+        
 
 class CalcThread(threading.Thread):
     def __init__(self, modelPath, frame):
