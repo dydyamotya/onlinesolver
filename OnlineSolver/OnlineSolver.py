@@ -147,30 +147,42 @@ class Window(wx.Frame):
         super().__init__(parent, title=title, size=wx.Size(500, 400))
 
         self.logger = logger
-        self.modelPath = self.loadPath()
+        self.loadConfig()
+        self.loadPaths()
+        self.modelPath = None
         self.readerPath = None
         self.worker = None
         self.file = None
         EVT_RESULT(self,self.OnResult)
 
+
         self._createGUI()
         self.Show(True)
         
-    def loadPath(self):
+    def loadConfig(self) -> None:
+        """Load the config from the config.conf file.
+        Read it by line and store all values in the dictionary."""
+        self.config_dict = {}
         with open('config.conf', 'r') as fd:
-            temp = fd.readline()
-            print(temp)
-            while temp != '':
-                if temp.startswith('ModelPath::'):
-                    break
-                temp = fd.readline()
-                print(temp)
-        return purify(temp.split('::')[1])
+            for line in fd.readlines():
+                key, value = line.split("::")
+                self.config_dict.update({key: value})
+
+    def loadPaths(self):
+        if "ModelPath" in self.config_dict.keys():
+            self.modelPath = self.config_dict["ModelPath"]
+        if "ReaderPath" in self.config_dict.keys():
+            self.readerPath = self.config_dict["ReaderPath"]
+
+
+    def createConfig(self):
+        with open("config.conf", "w") as fd:
+            for key, value in self.config_dict.items():
+                fd.write("::".join([key, value])+'\n')
+
+
 
     def _createGUI(self):
-
-        
-
         #Buttons
 
         self.startButton = wx.Button(self, ID_START, 'Start')
@@ -233,16 +245,21 @@ class Window(wx.Frame):
         if self.worker:
             self.worker.stopThread()
             self.worker = None
+
     def OnResult(self, event):
         pass
+
     def printResults(self, answers : list):
         for answer, widget, index in zip(answers, (self.status1, self.status2, self.status3, self.status4, self.all_status), (1,2,3,4,0)):
             widget.SetLabel(answer)
             self.logger.info(answer, extra={'sensor' : str(index) if index > 0 else 'all'})
+
     def OnReaderLoad(self, event):
         openDialog = wx.DirDialog(self, 'Choose a temp folder', '', wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
         if openDialog.ShowModal() == wx.ID_OK:
             self.readerPath = openDialog.GetPath()
+            self.config_dict["ReaderPath"] = self.readerPath
+            self.createConfig()
             self.file = functions.FileReader(self.readerPath)
             self.readerPathStatus.SetLabel(self.readerPath)
 
