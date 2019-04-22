@@ -147,12 +147,15 @@ class Window(wx.Frame):
         super().__init__(parent, title=title, size=wx.Size(500, 400))
 
         self.logger = logger
-        self.loadConfig()
-        self.loadPaths()
+        
         self.modelPath = None
         self.readerPath = None
         self.worker = None
         self.file = None
+
+
+        self.loadConfig()
+        self.loadPaths()
         EVT_RESULT(self,self.OnResult)
 
 
@@ -166,7 +169,7 @@ class Window(wx.Frame):
         with open('config.conf', 'r') as fd:
             for line in fd.readlines():
                 key, value = line.split("::")
-                self.config_dict.update({key: value})
+                self.config_dict.update({key: purify(value)})
 
     def loadPaths(self):
         if "ModelPath" in self.config_dict.keys():
@@ -178,7 +181,7 @@ class Window(wx.Frame):
     def createConfig(self):
         with open("config.conf", "w") as fd:
             for key, value in self.config_dict.items():
-                fd.write("::".join([key, value])+'\n')
+                fd.write("::".join([key, value]) + '\n')
 
 
 
@@ -202,7 +205,8 @@ class Window(wx.Frame):
         self.status4 = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
         self.all_status = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
 
-        self.readerPathStatus = wx.TextCtrl(self, -1, '...', style = wx.TE_LEFT, size = wx.Size(500, 20))
+        self.readerPathStatus = wx.TextCtrl(self, -1, self.readerPath, style = wx.TE_LEFT, size = wx.Size(500, 20))
+        
 
         #Sizer
 
