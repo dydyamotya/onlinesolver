@@ -114,13 +114,9 @@ class Model(object):
         self.scaler_h2 = None
         self.scaler_h2_y = None
         for file in list(os.listdir(self.path)):
-            print(file)
-            print('scaler_propane_regr_y' == file)
             if 'scaler_air' == file:
-#                 print('rrrr')
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.scaler_air = pickle.load(fd)
-                    print(self.scaler_air)
             elif 'scaler_gases' == file:
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.scaler_gases = pickle.load(fd)
@@ -138,7 +134,6 @@ class Model(object):
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.scaler_h2_y = pickle.load(fd)
             elif 'scaler_propane_regr_y'== file:
-                print('ggggg')
                 with open(self.path+'/'+file, 'rb') as fd:
                     self.scaler_propane_y = pickle.load(fd)
 #             elif 'scaler_propane_regr_y' in file:
@@ -160,9 +155,9 @@ class Model(object):
         self._CheckFiles()
 
     def _CheckFiles(self):
-        self.workable = True
-#         if (self.scaler_gases and self.scaler_air and self.scaler_propane and self.scaler_h2 and self.model_air  and self.model_gases and self.model_regr_propane and self.model_regr_h2):
-#             self.workable = True
+        #Не надо так делать
+         if (self.scaler_gases and self.scaler_air):
+             self.workable = True
 
     def Evaluate(self, vector : np.array, threshold : float = 33.3) -> (str, np.array):
         """ Takes the vector to define the answer

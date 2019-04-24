@@ -84,18 +84,29 @@ def reduce_point_number(array: np.array, window: int, shift: int = None) -> np.a
 class Data():
     def __init__(self):
         print('Data Initialised')
-        self.data = np.array([])
-    def take_data(self, init_data):
-        new_data = self.import_data(init_data)
-        if self.data.shape[0] > new_data.shape[0]:
-            self.data = np.vstack([self.data[new_data.shape[0]:], new_data])
-        else:
-            self.data = np.vstack([np.zeros(new_data.shape), new_data])
+        self.data = [np.array([])]*4
+    def take_data(self, init_data) -> bool:
+        """Returns True, if data was normally taken
+        False, if model must wait"""
+        return_flag = False
+        new_data = self.import_data(init_data) #list
+        print("New data shape:", new_data[0].shape)
+        for i in range(4):
+            if self.data[i].shape[0] > new_data[i].shape[0]:
+                if i == 0:
+                    print("Return flag to True")
+                    return_flag = True
+                self.data[i] = np.vstack([self.data[i][new_data[i].shape[0]:], new_data[i]])
+            else:
+                self.data[i] = np.vstack([np.zeros(new_data[i].shape), new_data[i]])
 
         for i in range(4):
             np.savetxt('temp'+str(i)+'.txt', self.data[i])
+        return return_flag
+        
     def import_data(self, data):
-        return [data[:, i:i+1] for i in range(7, 14, 2)]
+        return [data[:, i:i+2] for i in range(7, 14, 2)]
+        
     def get_(self, sens_num):
         return self.data[sens_num][450:1000].T
         
@@ -124,17 +135,17 @@ class CalcThread(threading.Thread):
         while not self.stopEvent.is_set():
             if self.frame.file.set_file():
                 print('Got file')
-                self.data.take_data(self.frame.file.read_data())
-                #There model must calculate the answer
-                answers = []
-                model_vectors = []
-                for idx, model_ in enumerate(self.models):
-                    answer, vector = model_.Evaluate(self.data.get_(idx))
+                if self.data.take_data(self.frame.file.read_data()):
+                    #There model must calculate the answer
+                    answers = []
+                    model_vectors = []
+                    for idx, model_ in enumerate(self.models):
+                        answer, vector = model_.Evaluate(self.data.get_(idx))
+                        answers.append(answer)
+                        model_vectors.append(vector)
+                    answer, _ = self.model0.Evaluate(np.hstack(model_vectors))
                     answers.append(answer)
-                    model_vectors.append(vector)
-                answer, _ = self.model0.Evaluate(np.hstack(model_vectors))
-                answers.append(answer)
-                self.frame.printResults(answers)
+                    self.frame.printResults(answers)
 
     def stopThread(self):
         self.stopEvent.set()
@@ -176,6 +187,7 @@ class Window(wx.Frame):
             self.modelPath = self.config_dict["ModelPath"]
         if "ReaderPath" in self.config_dict.keys():
             self.readerPath = self.config_dict["ReaderPath"]
+            self.file = functions.FileReader(self.readerPath)
 
 
     def createConfig(self):
