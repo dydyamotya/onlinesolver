@@ -79,7 +79,7 @@ class Model(object):
         from keras.layers import BatchNormalization
         
         model = Sequential()
-        model.add(Dense(40, input_dim=124,init='uniform', activation='tanh', use_bias=True))
+        model.add(Dense(40, input_dim=549,init='uniform', activation='tanh', use_bias=True))
         model.add(BatchNormalization())
         model.add(Dropout(0.6))
         model.add(Dense(120, input_dim=40,init='uniform', activation='tanh', use_bias=True))
@@ -168,14 +168,15 @@ class Model(object):
         if not self.workable:
             return "No model", np.zeros(3)
 
-        vector = self.sample_prepare(vector)
+        vector4classif = self.sample_prepare(vector)
         
-        vector_air = self.scaler_air.transform(vector)
-        vector_gases = self.scaler_gases.transform(vector)
+        vector_air = self.scaler_air.transform(vector4classif)
+        vector_gases = self.scaler_gases.transform(vector4classif)
         vector_air[0][67] = vector_air[0][68]
         vector_gases[0][67] = vector_gases[0][68]
-        vector_h2 = self.scaler_h2.transform(vector[:,:-1])
-        vector_propane = self.scaler_propane.transform(vector[:,:-1])
+        vector = (vector - np.min(vector, axis=1).reshape([-1,1]))/np.sum(vector, axis=1).reshape([-1,1])
+        vector_h2 = self.scaler_h2.transform(vector[-1,:-1].reshape([1,-1]))
+        vector_propane = self.scaler_propane.transform(vector[-1,:-1].reshape([1,-1]))
 
         
         answer_air = list(self.model_air.predict(vector_air)[0]) #ndarray
