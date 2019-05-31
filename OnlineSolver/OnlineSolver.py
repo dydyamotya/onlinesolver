@@ -1,4 +1,6 @@
 import logging
+import os
+import datetime
 import functions
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -154,11 +156,12 @@ class CalcThread(threading.Thread):
 
 
 class Window(wx.Frame):
-    def __init__(self, parent, title, logger):
+    def __init__(self, parent, title, logger, start_time):
         super().__init__(parent, title=title, size=wx.Size(500, 400))
 
         self.logger = logger
-        
+        self.start_time = start_time
+
         self.modelPath = None
         self.readerPath = None
         self.worker = None
@@ -187,7 +190,7 @@ class Window(wx.Frame):
             self.modelPath = self.config_dict["ModelPath"]
         if "ReaderPath" in self.config_dict.keys():
             self.readerPath = self.config_dict["ReaderPath"]
-            self.file = functions.FileReader(self.readerPath)
+            
 
 
     def createConfig(self):
@@ -253,7 +256,9 @@ class Window(wx.Frame):
     
     def OnStart(self, event):
         if not self.worker and self.readerPath:
+            self.file = functions.FileReader(self.readerPath)
             self.all_status.SetLabel('Waiting for results')
+            self.CopyFilesOnStart()
             self.worker = CalcThread(self.modelPath, self)
         else:
             self.all_status.SetLabel('Cant start. Choose temp folder.')
@@ -268,7 +273,7 @@ class Window(wx.Frame):
     def printResults(self, answers : list):
         for answer, widget, index in zip(answers, (self.status1, self.status2, self.status3, self.status4, self.all_status), (1,2,3,4,0)):
             widget.SetLabel(answer)
-            self.logger.info(answer, extra={'sensor' : str(index) if index > 0 else 'all'})
+            self.logger.info(answer, extra={'sensor' : str(index)})
 
     def OnReaderLoad(self, event):
         openDialog = wx.DirDialog(self, 'Choose a temp folder', '', wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
@@ -279,14 +284,25 @@ class Window(wx.Frame):
             self.file = functions.FileReader(self.readerPath)
             self.readerPathStatus.SetLabel(self.readerPath)
 
+    def CopyFilesOnStart(self):
+        files_list = os.listdir(self.readerPath)
+        new_folder_name = os.path.split(self.readerPath)[0]+"/"+self.start_time+"/"
+        try:
+            os.mkdir(new_folder_name)
+        except:
+            print("The folder already exists. It can be strange...")
+        for file in files_list:
+            os.rename(self.readerPath+"/"+file, new_folder_name+file)
+
 if __name__ == '__main__':
     #Log init
     FORMAT = "%(asctime)-15s\t%(sensor)s\t%(message)s"
-    logging.basicConfig(filename='sample.log', level=logging.INFO, format=FORMAT)
+    start_time = datetime.datetime.strftime(datetime.datetime.today(), "%Y_%m_%d_%H_%M")
+    logging.basicConfig(filename='{}.log'.format(start_time), level=logging.INFO, format=FORMAT)
     logger = logging.getLogger('main')
     # ================
     #Main App
     app = wx.App(False)  # Create a new app, don't redirect stdout/stderr to a window.
-    wnd = Window(None, 'Electronic Nouse', logger)
+    wnd = Window(None, 'Electronic Nouse', logger, start_time)
     app.MainLoop()
 
