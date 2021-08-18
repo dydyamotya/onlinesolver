@@ -1,205 +1,84 @@
+import pathlib
+import pickle
 
-import pandas as pd
 import numpy as np
-import pickle, os        
+from tensorflow.keras.models import model_from_json
+
+CLASS_LIST = ["air", "laurel", "cinnamon"]
 
 
-def bookstein(x):
+def bookstein(x, first_idx=1020, last_idx=2040):
     x = np.array(x)
-    nj = x.shape[0] #length
-    j = np.ones(nj) 
-    w = (x[:,0] + (1j)*x[:,1] - (j*(x[0,0] + (1j)*x[0,1])))/(x[1,0]+(1j)*x[1,1] - x[0,0] - (1j)*x[0,1])-0.5
+    nj = x.shape[0]
+    j = np.ones(nj)
+    w = (x[:, 0] + (1j) * x[:, 1] - (j * (x[first_idx, 0] + (1j) * x[first_idx, 1]))) / (
+            x[last_idx, 0] + (1j) * x[last_idx, 1] - x[first_idx, 0] - (1j) * x[first_idx, 1]) - 0.5
     w = w[0:nj]
-    y=np.real(w)
+    y = np.real(w)
     z = np.imag(w)
-    print("I print y-shape", y.shape)
     u = np.vstack([y, z])
     return u
 
 
+def aggregator(x, wndw=5):
+    arr_tmp = np.array([np.median(x[:, i - wndw:i], axis=1) for i in range(wndw, x.shape[1], wndw)]).T
+    return arr_tmp
+
+
 class Model(object):
-    
-        
-    def sample_prepare(self, data_sample):
-        
-        print("Incoming data sample shape: ",data_sample.shape)
-       
-        #to avoid -inf
-        def __aggregator(x, wndw=8):
-            x = np.array(x)
-            arr_tmp = np.array([np.median(x[:,i-wndw:i], axis=1).reshape([2,1]) for i in range(wndw, x.shape[1], wndw)]).reshape(-1,2)
-            arr_tmp= np.concatenate([arr_tmp, np.mean(x[:,-(x.shape[1]%wndw):], axis=1).reshape([1,2])], axis=0)
-            out = np.transpose(arr_tmp)
-
-            return(out)
-        print('Data sample', data_sample)
-        agregated_sample = __aggregator(data_sample)
-        print('agg sample', agregated_sample)
-        agregated_sample[0,:]=agregated_sample[0,:]/100
-        agregated_sample[1,:]=np.log10(agregated_sample[1,:])
-        
-        #print(agregated_sample)
-        #print(bookstein( np.transpose(agregated_sample) ))
-        r_bookstein = bookstein(np.transpose(agregated_sample))
-
-        bookstein_vec = np.array(list(r_bookstein[0][3:-5])+list(r_bookstein[1][5:])).reshape([1,-1])
-        
-        # bookstein_vec = np.hstack([r_bookstein[0], r_bookstein[1]]).reshape([1,-1])
-        
-        #print(bookstein_vec)
-#         bookstein_vec_scaled = scalerX.transform(bookstein_vec)
-
-        return bookstein_vec
-
-    
-    
-    
-    def classsif_model(self, weights_path):
-
-        from keras.models import Sequential
-        from keras.layers.core import Dense, Activation, Dropout
-        from keras.layers import BatchNormalization
-        
-        model = Sequential()
-        model.add(Dense(40, input_dim=125,init='uniform', activation='tanh', use_bias=True))
-        model.add(BatchNormalization())
-        model.add(Dropout(0.6))
-        model.add(Dense(160, input_dim=40,init='uniform', activation='tanh', use_bias=True))
-        model.add(BatchNormalization())
-        model.add(Dense(2, input_dim=160,init='uniform', activation='softmax', use_bias=True))
-        model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
-
-        model.load_weights(weights_path)
-        return model
- 
-    def regression_model(self, weights_path):
-
-        from keras.models import Sequential
-        from keras.layers.core import Dense, Activation, Dropout
-        from keras.layers import BatchNormalization
-        
-        model = Sequential()
-        model.add(Dense(40, input_dim=549,init='uniform', activation='tanh', use_bias=True))
-        model.add(BatchNormalization())
-        model.add(Dropout(0.6))
-        model.add(Dense(120, input_dim=40,init='uniform', activation='tanh', use_bias=True))
-        model.add(BatchNormalization())
-        model.add(Dropout(0.6))
-        model.add(Dense(60, input_dim=120,init='uniform', activation='tanh', use_bias=True))
-        model.add(BatchNormalization())
-        model.add(Dense(1, input_dim=60,init='uniform', activation='tanh', use_bias=True))
-        model.compile(loss='mse', optimizer='adadelta', metrics=['mae'])
-        model.load_weights(weights_path)
-        return model   
-    
     """
     Объект класса загружает в память файлы, необходимые для восстановления tensorflow модели.
     После этого соответствующие методы служат для того, чтобы посчитать ответ модели.
     """
-    def __init__(self, modelPath):
+
+    def __init__(self, modelPath: pathlib.Path):
         self.path = modelPath
         self.workable = False
         self._LoadModel()
 
     def _LoadModel(self):
         """Load the model, reading the needed files in folder"""
-        self.config_file = None
-        self.layers_list = None
-        self.scaler_gases = None
-        self.scaler_air = None
-        self.model_air = None
-        self.model_gases = None
-        self.scaler_propane = None
-        self.scaler_propane_y = None
-        self.scaler_h2 = None
-        self.scaler_h2_y = None
-        for file in list(os.listdir(self.path)):
-            if 'scaler_air' == file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_air = pickle.load(fd)
-            elif 'scaler_gases' == file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_gases = pickle.load(fd)
-            elif 'weights_air' == file:
-                self.model_air = self.classsif_model(self.path+'/'+file)
-            elif 'weights_gases' == file:
-                self.model_gases = self.classsif_model(self.path+'/'+file)
-            elif 'scaler_h2_regr' == file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_h2 = pickle.load(fd)
-            elif 'scaler_propane_regr' == file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_propane = pickle.load(fd)
-            elif 'scaler_h2_regr_y' in file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_h2_y = pickle.load(fd)
-            elif 'scaler_propane_regr_y'== file:
-                with open(self.path+'/'+file, 'rb') as fd:
-                    self.scaler_propane_y = pickle.load(fd)
-#             elif 'scaler_propane_regr_y' in file:
-#                 print('ggggg')
-#                 with open(self.path+'/'+file, 'rb') as fd:
-#                     print('scaler_propane_regr_y loaded')
-#                     self.scaler_propane_y = pickle.load(fd)
-#                     print(self.scaler_propane_y )
-#                     print('-------')
-            elif 'weights_regr_h2' in file:
-                self.model_regr_h2 = self.regression_model(self.path+'/'+file)
-            elif 'weights_regr_propane' in file:
-                self.model_regr_propane = self.regression_model(self.path+'/'+file)
-#             elif 'weights_regression_h2' in file:
-#                 self.weights_regression_h2 = self.path+'/'+file
-#             elif 'weights_regression_propane' in file:
-#                 self.weights_regression_propane = self.path+'/'+file  
-                    
-        self._CheckFiles()
+        # load scaler model
+        with (self.path / 'scaler_x').open('rb') as f:
+            self.scaler = pickle.load(f)
+            f.close()
 
-    def _CheckFiles(self):
-        #Не надо так делать
-         if (self.scaler_gases and self.scaler_air):
-             self.workable = True
+        # load neural net model
+        with (self.path / 'model.json').open('r') as json_file:
+            loaded_model_json = json_file.read()
+            self.model = model_from_json(loaded_model_json)
+            json_file.close()
 
-    def Evaluate(self, vector : np.array, threshold : float = 33.3) -> (str, np.array):
+        # load model weights
+        self.model.load_weights((self.path / 'checkpoint').as_posix())
+
+    def sample_prepare(self, data_sample: np.ndarray):
+        raw_data = data_sample
+        '''Sample preprocessing
+            1st row = T, 2nd row = R
+
+            Step 1: median smooth
+            Step 2: bookstein mapping
+            Step 3: MinMax scaling
+            Step 4: reshape for conv1d input layer'''
+        data_smoothed = aggregator(np.array([np.log10(raw_data[1]), raw_data[0] / 50]), 5)
+        shape_data = bookstein(data_smoothed.transpose(), 60, 90)[1]
+        scaled_sample = self.scaler.transform([shape_data])
+        return scaled_sample.reshape([1, 119, 1])
+
+    def Evaluate(self, vector: np.ndarray, threshold: float = 33.3) -> (str, np.ndarray):
         """ Takes the vector to define the answer
             Returns:
                 answer : string
                 array_to_common_net : np.array
             """
-        if not self.workable:
-            return "No model", np.zeros(3)
-
-        vector4classif = self.sample_prepare(vector)
-        
-        vector_air = self.scaler_air.transform(vector4classif)
-        vector_gases = self.scaler_gases.transform(vector4classif)
-        vector_air[0][67] = vector_air[0][68]
-        vector_gases[0][67] = vector_gases[0][68]
-        vector = (vector - np.min(vector, axis=1).reshape([-1,1]))/np.sum(vector, axis=1).reshape([-1,1])
-        vector_h2 = self.scaler_h2.transform(vector[-1,:-1].reshape([1,-1]))
-        vector_propane = self.scaler_propane.transform(vector[-1,:-1].reshape([1,-1]))
-
-        
-        answer_air = list(self.model_air.predict(vector_air)[0]) #ndarray
-        print('air predict; air = [0, 1]', answer_air)
-        answer_gases = [0,0]
-        if answer_air[0] > 0.5:
-            answer_gases = list(self.model_gases.predict(vector_gases)[0])
-            print('gases; propane = [0,1]', answer_gases)
-            if answer_gases[0]>0.5:
-                answer_regr = self.scaler_h2_y.inverse_transform(self.model_regr_h2.predict(vector_h2))
-            else:
-                answer_regr = self.scaler_propane_y.inverse_transform(self.model_regr_propane.predict(vector_propane))
-
-            
-        answer_gases.append(answer_air[1])
-        answer_vector = np.array(answer_gases)
-        print(answer_vector)
-        gas_index = answer_vector.argmax()
-        #There must be more smart gas namer.
-        #But on the first time, its normal.
-        if gas_index == 2: return "Air", answer_vector
-        elif gas_index == 0: return "Hydrogen "+str(int(answer_regr[0][0])), answer_vector
-        else: return "Propane "+str(int(answer_regr[0][0])), answer_vector
+        # model evaluation
+        vector = vector.transpose()
+        vector = vector[:, :598]
+        input_sample = self.sample_prepare(vector)
+        pred_index, = self.model.predict_classes(input_sample)
+        gas = CLASS_LIST[pred_index]
+        return gas, np.array([])
 
 
 def CreateModels(models_paths):

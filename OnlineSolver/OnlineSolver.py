@@ -42,27 +42,20 @@ class Data():
         """Returns True, if data was normally taken
         False, if model must wait"""
         return_flag = False
-        new_data = self.import_data(init_data)  # list
-        logger.debug("New data shape: {}".format(new_data[0].shape))
-        for i in range(4):
-            if self.data[i].shape[0] > new_data[i].shape[0]:
-                if i == 0:
-                    logger.debug("Return flag to True")
-                    return_flag = True
-                self.data[i] = np.vstack([self.data[i][new_data[i].shape[0]:], new_data[i]])
-            else:
-                self.data[i] = np.vstack([np.zeros(new_data[i].shape), new_data[i]])
+        self.data = self.import_data(init_data)  # list
 
         for i in range(4):
             # noinspection PyTypeChecker
             np.savetxt('temp' + str(i) + '.txt', self.data[i])
+
+        return_flag = True
         return return_flag
 
     def import_data(self, data):
         return [data[:, i:i + 2] for i in range(7, 14, 2)]
 
     def get_(self, sens_num):
-        return self.data[sens_num][450:1000].T
+        return self.data[sens_num]
 
 
 class CalcThread(threading.Thread):
@@ -75,14 +68,15 @@ class CalcThread(threading.Thread):
         Необходимо будет только каждую сетку раскидать по своим папкам.
         """
 
-        model_paths = [cwd / "model0"]
+        model_path = cwd / "model0"
         # Models assignement
         # 0 - concilium net
         # models - sensors nets
         # ==================================================
-        self.model0: model.Model = model.CreateModels(model_paths)
+        self.model0: model.Model = model.Model(model_path)
         # ==================================================
         self.frame = frame
+        self.daemon = True
         self.stopEvent = threading.Event()
         self.data = Data()
         self.start()
@@ -175,15 +169,15 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
     def on_start(self):
         start_time: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        if not self.worker and self.reader_path:
-            self.file = functions.FileReader(self.reader_path)
-            self.status.setText("Waiting for results.")
-            self.copy_files_on_start(start_time)
-            self.worker = CalcThread(self)
         if self.worker:
             self.status.setText("Worker already there.")
         if not self.reader_path:
             self.status.setText("Cant start, choose correct temp folder.")
+        if not self.worker and self.reader_path:
+            self.file = functions.FileReader(self.reader_path)
+            self.status.setText("Waiting for results.")
+            #self.copy_files_on_start(start_time)
+            self.worker = CalcThread(self)
 
     def on_stop(self):
         try:
