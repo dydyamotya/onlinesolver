@@ -7,10 +7,10 @@ import sys
 import threading
 import typing
 
-import PySide6
+import PySide2
 import numpy as np
-from PySide6 import QtWidgets, QtGui
-from PySide6.QtWidgets import QFileDialog
+from PySide2 import QtWidgets, QtGui
+from PySide2.QtWidgets import QFileDialog
 
 import functions
 import model
@@ -73,7 +73,7 @@ class CalcThread(threading.Thread):
         # 0 - concilium net
         # models - sensors nets
         # ==================================================
-        self.model0: model.Model = model.Model(model_path)
+        self.model0 = model.Model(model_path)
         # ==================================================
         self.frame = frame
         self.daemon = True
@@ -116,9 +116,9 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         self.reader_path = None
 
         self.config = configparser.ConfigParser()
-        self.config.read(config_file)
+        self.read_config()
 
-        self.worker: typing.Optional[CalcThread] = None
+        self.worker = None
 
         self.status = self.statusBar()
         self.status.setText = self.status.showMessage
@@ -161,14 +161,14 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         self.show()
 
     def read_config(self):
-        self.config.read_file(config_file.as_posix())
+        logger.debug(config_file.as_posix())
+        self.config.read(config_file.as_posix())
 
     def write_config(self):
         with config_file.open("w") as fd:
             self.config.write(fd)
 
     def on_start(self):
-        start_time: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if self.worker:
             self.status.setText("Worker already there.")
         if not self.reader_path:
@@ -176,7 +176,6 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         if not self.worker and self.reader_path:
             self.file = functions.FileReader(self.reader_path)
             self.status.setText("Waiting for results.")
-            #self.copy_files_on_start(start_time)
             self.worker = CalcThread(self)
 
     def on_stop(self):
@@ -219,6 +218,6 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     # Main App
-    app = PySide6.QtWidgets.QApplication()
+    app = QtWidgets.QApplication()
     main_window = CustomMainWindow()
     sys.exit(app.exec_())
