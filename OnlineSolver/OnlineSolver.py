@@ -1,308 +1,230 @@
-import logging
-import os
+import configparser
 import datetime
-import functions
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
-import wx
+import logging
+import pathlib
+import shutil
+import sys
 import threading
-import full_learn_package as flp
-import main_cut_package as mcp
+import typing
+
+import PySide6
 import numpy as np
+from PySide6 import QtWidgets, QtGui
+from PySide6.QtWidgets import QFileDialog
+
+import functions
 import model
 
+cwd = pathlib.Path().cwd()
+logs_folder = cwd / "logs"
+config_file = cwd / "config.conf"
+logs_folder.mkdir(exist_ok=True)
+logging_file_name = (logs_folder / datetime.datetime.now().strftime("%y%m%d_%H%M%S")).with_suffix(".log")
+logging.basicConfig(filename=logging_file_name.as_posix(),
+                    filemode='w',
+                    level=logging.DEBUG,
+                    datefmt="%y%m%d_%H:%M:%S",
+                    format='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s')
 
-ID_START = wx.NewId()
-ID_STOP = wx.NewId()
-EVT_RESULT_ID =  wx.NewId()
-ID_READER = wx.NewId()
+logger = logging.getLogger()
 
-
-def EVT_RESULT(win, func):
-    win.Connect(-1, -1, EVT_RESULT_ID, func)
 
 def purify(string):
     return string[:string.find('\n')]
 
-def meaner(array, window = 20):
-    size = array.shape[0]
-    return np.hstack([np.mean(array[i:i+window]) for i in range(0, size, window)])
-
-def scalling(array):
-    array = array.copy()
-    min_ = np.min(array)
-    array -= min_
-    max_ = np.max(array)
-    array /= max_
-    return array
-
-def smoothing(row, win=5):
-    """
-    Smooth given row in window with width = win.
-    """
-    array = np.array(row).ravel()
-    new_array = np.empty(array.shape)
-    offset1 = win//2
-    offset2 = win - offset1
-    array_size = len(array)
-    for i in range(array_size):
-        if i < offset1:
-            new_array[i] = np.mean(array[:i+offset2])
-        elif i > array_size - offset2:
-            new_array[i] = np.mean(array[i-offset1:])
-        else:
-            new_array[i] = np.mean(array[i-offset1:i+offset2])
-    return new_array
-
-class ResultEvent(wx.PyEvent):
-    def __init__(self, data):
-        super().__init__()
-        self.SetEventType(EVT_RESULT_ID)
-        self.data = data
-    
-def reduce_point_number(array: np.array, window: int, shift: int = None) -> np.array:
-    """This function reduce the number of points in the scaling maner.
-    Cause of that, needed information may be lost.
-    Input:      array : 1-D np.array to convert
-                window  : int
-                shift : int
-    Returns:            1-D np.array
-    
-    Comment: shape = window * steps"""
-    data = array.copy()
-    data = data.ravel()
-    if shift:
-        if shift >= window:
-            raise Exception("Shift must be less than window")
-    else:
-        shift = 0
-    steps = data.shape[0] // window #aka number of points to return
-    to_return = np.empty((steps, ))
-    for i in range(steps):
-        to_return[i] = data[i * window + shift]
-    return to_return
 
 class Data():
     def __init__(self):
-        print('Data Initialised')
-        self.data = [np.array([])]*4
+        logger.debug('Data Initialised')
+        self.data = [np.array([])] * 4
+
     def take_data(self, init_data) -> bool:
         """Returns True, if data was normally taken
         False, if model must wait"""
         return_flag = False
-        new_data = self.import_data(init_data) #list
-        print("New data shape:", new_data[0].shape)
+        new_data = self.import_data(init_data)  # list
+        logger.debug("New data shape: {}".format(new_data[0].shape))
         for i in range(4):
             if self.data[i].shape[0] > new_data[i].shape[0]:
                 if i == 0:
-                    print("Return flag to True")
+                    logger.debug("Return flag to True")
                     return_flag = True
                 self.data[i] = np.vstack([self.data[i][new_data[i].shape[0]:], new_data[i]])
             else:
                 self.data[i] = np.vstack([np.zeros(new_data[i].shape), new_data[i]])
 
         for i in range(4):
-            np.savetxt('temp'+str(i)+'.txt', self.data[i])
+            # noinspection PyTypeChecker
+            np.savetxt('temp' + str(i) + '.txt', self.data[i])
         return return_flag
-        
+
     def import_data(self, data):
-        return [data[:, i:i+2] for i in range(7, 14, 2)]
-        
+        return [data[:, i:i + 2] for i in range(7, 14, 2)]
+
     def get_(self, sens_num):
         return self.data[sens_num][450:1000].T
-        
+
 
 class CalcThread(threading.Thread):
-    def __init__(self, modelPath, frame):
+    def __init__(self, frame):
         super().__init__()
-        #There must be the loading of the model
+        # There must be the loading of the model
         """В будущем, здесь, скорее всего, будет пять моделей.
         На каждый сенсор по одной, и одна для комплексного определения.
         Современный режим моделей подходит для этой задачи.
         Необходимо будет только каждую сетку раскидать по своим папкам.
         """
-        model_paths = ["./model{}".format(i) for i in range(5)]
-        #Models assignement
-        #0 - concilium net
-        #models - sensors nets
-        #==================================================
-        self.model0, *self.models = model.CreateModels(model_paths)
-        #==================================================
+
+        model_paths = [cwd / "model0"]
+        # Models assignement
+        # 0 - concilium net
+        # models - sensors nets
+        # ==================================================
+        self.model0: model.Model = model.CreateModels(model_paths)
+        # ==================================================
         self.frame = frame
         self.stopEvent = threading.Event()
         self.data = Data()
         self.start()
+
     def run(self):
         while not self.stopEvent.is_set():
             if self.frame.file.set_file():
-                print('Got file')
+                logger.debug('Got file')
                 if self.data.take_data(self.frame.file.read_data()):
-                    #There model must calculate the answer
                     answers = []
-                    model_vectors = []
-                    for idx, model_ in enumerate(self.models):
-                        answer, vector = model_.Evaluate(self.data.get_(idx))
-                        answers.append(answer)
-                        model_vectors.append(vector)
-                    answer, _ = self.model0.Evaluate(np.hstack(model_vectors))
+
+                    # model_vectors = []
+                    # for idx, model_ in enumerate(self.models):
+                    #     answer, vector = model_.Evaluate(self.data.get_(idx))
+                    #     answers.append(answer)
+                    #     model_vectors.append(vector)
+                    # answer, _ = self.model0.Evaluate(np.hstack(model_vectors))
+                    # self.frame.printResults(answers)
+
+                    answer, vector = self.model0.Evaluate(self.data.get_(0))
                     answers.append(answer)
-                    self.frame.printResults(answers)
+                    self.frame.print_results(answers)
 
     def stopThread(self):
         self.stopEvent.set()
+
     def is_stopped(self):
         return self.stopEvent.is_set()
 
 
-class Window(wx.Frame):
-    def __init__(self, parent, title, logger, start_time):
-        super().__init__(parent, title=title, size=wx.Size(500, 400))
+class CustomMainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super(CustomMainWindow, self).__init__()
+        self.setWindowTitle("OnlineSolver")
 
-        self.logger = logger
-        self.start_time = start_time
-
-        self.modelPath = None
-        self.readerPath = None
-        self.worker = None
         self.file = None
+        self.reader_path = None
 
+        self.config = configparser.ConfigParser()
+        self.config.read(config_file)
 
-        self.loadConfig()
-        self.loadPaths()
-        EVT_RESULT(self,self.OnResult)
+        self.worker: typing.Optional[CalcThread] = None
 
+        self.status = self.statusBar()
+        self.status.setText = self.status.showMessage
 
-        self._createGUI()
-        self.Show(True)
-        
-    def loadConfig(self) -> None:
-        """Load the config from the config.conf file.
-        Read it by line and store all values in the dictionary."""
-        self.config_dict = {}
-        with open('config.conf', 'r') as fd:
-            for line in fd.readlines():
-                key, value = line.split("::")
-                self.config_dict.update({key: purify(value)})
+        self._init_ui()
 
-    def loadPaths(self):
-        if "ModelPath" in self.config_dict.keys():
-            self.modelPath = self.config_dict["ModelPath"]
-        if "ReaderPath" in self.config_dict.keys():
-            self.readerPath = self.config_dict["ReaderPath"]
-            
+    def _init_ui(self):
 
+        widget = QtWidgets.QWidget()
 
-    def createConfig(self):
-        with open("config.conf", "w") as fd:
-            for key, value in self.config_dict.items():
-                fd.write("::".join([key, value]) + '\n')
+        self.setCentralWidget(widget)
 
+        main_layout = QtWidgets.QVBoxLayout(widget)
 
+        buttons_layout = QtWidgets.QHBoxLayout()
 
-    def _createGUI(self):
-        #Buttons
+        self.reader_path_button = QtWidgets.QPushButton("Choose reader path", self)
+        self.reader_path_button.clicked.connect(self.on_reader_path_load)
 
-        self.startButton = wx.Button(self, ID_START, 'Start')
-        self.stopButton = wx.Button(self, ID_STOP, 'Stop')
-        
-        self.loadReaderButton = wx.Button(self, ID_READER, 'Load Reader')
-        self.Bind(wx.EVT_BUTTON, self.OnStart, id=ID_START)
-        self.Bind(wx.EVT_BUTTON, self.OnStop, id=ID_STOP)
-        
-        self.Bind(wx.EVT_BUTTON, self.OnReaderLoad, id=ID_READER)
+        self.start_button = QtWidgets.QPushButton("Start", self)
+        self.start_button.clicked.connect(self.on_start)
+        self.stop_button = QtWidgets.QPushButton("Stop", self)
+        self.stop_button.clicked.connect(self.on_stop)
 
-        #Statuses
+        buttons_layout.addWidget(self.reader_path_button)
+        buttons_layout.addWidget(self.start_button)
+        buttons_layout.addWidget(self.stop_button)
 
-        self.status1 = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
-        self.status2 = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
-        self.status3 = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
-        self.status4 = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
-        self.all_status = wx.TextCtrl(self, -1, '', style=wx.TE_CENTER | wx.TE_READONLY, size = wx.Size(250, 20))
+        data_layout = QtWidgets.QFormLayout()
 
-        self.readerPathStatus = wx.TextCtrl(self, -1, self.readerPath, style = wx.TE_LEFT, size = wx.Size(500, 20))
-        
+        self.status1 = QtWidgets.QLineEdit(self)
+        self.status1.setDisabled(True)
+        self.result_widgets = [self.status1]
 
-        #Sizer
+        data_layout.addRow("Flavor", self.status1)
 
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
-        gasesSizer = wx.FlexGridSizer(5, 2, 2, 2)
-        gasesSizer.AddGrowableCol(1)
-        buttonSizer = wx.BoxSizer(wx.HORIZONTAL)
-        labelSizer = wx.BoxSizer(wx.VERTICAL)
+        main_layout.addLayout(buttons_layout)
+        main_layout.addLayout(data_layout)
 
-        gasesSizer.Add(wx.StaticText(self, -1, 'Sensor 1'))
-        gasesSizer.Add(self.status1, 0, flag = wx.LEFT)
-        gasesSizer.Add(wx.StaticText(self, -1, 'Sensor 2'))
-        gasesSizer.Add(self.status2, 0, flag = wx.LEFT)
-        gasesSizer.Add(wx.StaticText(self, -1, 'Sensor 3'))
-        gasesSizer.Add(self.status3, 0, flag = wx.LEFT)
-        gasesSizer.Add(wx.StaticText(self, -1, 'Sensor 4'))
-        gasesSizer.Add(self.status4, 0, flag = wx.LEFT)
-        gasesSizer.Add(wx.StaticText(self, -1, 'Sensors Array'))
-        gasesSizer.Add(self.all_status, 0, flag = wx.LEFT)
+        self.show()
 
-        buttonSizer.Add(self.startButton, 0, flag = wx.LEFT)
-        buttonSizer.Add(self.stopButton, 0, flag = wx.LEFT)
-        buttonSizer.Add(self.loadReaderButton, 0, flag = wx.LEFT)
+    def read_config(self):
+        self.config.read_file(config_file.as_posix())
 
-        labelSizer.Add(self.readerPathStatus, 0, flag = wx.LEFT | wx.EXPAND)
+    def write_config(self):
+        with config_file.open("w") as fd:
+            self.config.write(fd)
 
-
-        mainSizer.Add(gasesSizer, 0, flag = wx.LEFT | wx.EXPAND)
-        mainSizer.Add(buttonSizer, 0, flag = wx.LEFT | wx.EXPAND)
-        mainSizer.Add(labelSizer, 0, flag = wx.LEFT | wx.EXPAND)
-        self.SetSizer(mainSizer)
-    
-    def OnStart(self, event):
-        if not self.worker and self.readerPath:
-            self.file = functions.FileReader(self.readerPath)
-            self.all_status.SetLabel('Waiting for results')
-            self.CopyFilesOnStart()
-            self.worker = CalcThread(self.modelPath, self)
-        else:
-            self.all_status.SetLabel('Cant start. Choose temp folder.')
-    def OnStop(self, event):
+    def on_start(self):
+        start_time: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        if not self.worker and self.reader_path:
+            self.file = functions.FileReader(self.reader_path)
+            self.status.setText("Waiting for results.")
+            self.copy_files_on_start(start_time)
+            self.worker = CalcThread(self)
         if self.worker:
-            self.worker.stopThread()
-            self.worker = None
+            self.status.setText("Worker already there.")
+        if not self.reader_path:
+            self.status.setText("Cant start, choose correct temp folder.")
 
-    def OnResult(self, event):
-        pass
-
-    def printResults(self, answers : list):
-        for answer, widget, index in zip(answers, (self.status1, self.status2, self.status3, self.status4, self.all_status), (1,2,3,4,0)):
-            widget.SetLabel(answer)
-            self.logger.info(answer, extra={'sensor' : str(index)})
-
-    def OnReaderLoad(self, event):
-        openDialog = wx.DirDialog(self, 'Choose a temp folder', '', wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
-        if openDialog.ShowModal() == wx.ID_OK:
-            self.readerPath = openDialog.GetPath()
-            self.config_dict["ReaderPath"] = self.readerPath
-            self.createConfig()
-            self.file = functions.FileReader(self.readerPath)
-            self.readerPathStatus.SetLabel(self.readerPath)
-
-    def CopyFilesOnStart(self):
-        files_list = os.listdir(self.readerPath)
-        new_folder_name = os.path.split(self.readerPath)[0]+"/"+self.start_time+"/"
+    def on_stop(self):
         try:
-            os.mkdir(new_folder_name)
-        except:
-            print("The folder already exists. It can be strange...")
-        for file in files_list:
-            os.rename(self.readerPath+"/"+file, new_folder_name+file)
+            self.worker.stopThread()
+        except AttributeError:
+            pass
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        self.on_stop()
+        super(CustomMainWindow, self).closeEvent(event)
+
+    def print_results(self, answers: typing.Iterable):
+        for answer, widget in zip(answers, self.result_widgets):
+            widget.setText(answer)
+
+    def on_reader_path_load(self):
+        default_dict = self.config["DEFAULT"]
+        reader_path = default_dict.get("reader_path", cwd.as_posix())
+        dir_name = QFileDialog.getExistingDirectory(parent=self,
+                                                    caption="Choose temp path",
+                                                    dir=reader_path)
+        if dir_name:
+            self.config["DEFAULT"] = {"reader_path": dir_name}
+            self.write_config()
+            self.reader_path = dir_name
+
+    def copy_files_on_start(self, start_time: str):
+        reader_path_pathlib = pathlib.Path(self.reader_path)
+        files_list = reader_path_pathlib.iterdir()
+        new_folder_name = reader_path_pathlib.parent / start_time
+        try:
+            new_folder_name.mkdir()
+        except FileNotFoundError:
+            self.status.setText("Wrong file path")
+        else:
+            for file in files_list:
+                shutil.move(file, new_folder_name / file.name)
+
 
 if __name__ == '__main__':
-    #Log init
-    FORMAT = "%(asctime)-15s\t%(sensor)s\t%(message)s"
-    start_time = datetime.datetime.strftime(datetime.datetime.today(), "%Y_%m_%d_%H_%M")
-    logging.basicConfig(filename='{}.log'.format(start_time), level=logging.INFO, format=FORMAT)
-    logger = logging.getLogger('main')
-    # ================
-    #Main App
-    app = wx.App(False)  # Create a new app, don't redirect stdout/stderr to a window.
-    wnd = Window(None, 'Electronic Nouse', logger, start_time)
-    app.MainLoop()
-
+    # Main App
+    app = PySide6.QtWidgets.QApplication()
+    main_window = CustomMainWindow()
+    sys.exit(app.exec_())
