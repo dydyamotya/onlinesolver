@@ -139,7 +139,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
         main_layout = QtWidgets.QVBoxLayout(widget)
 
-        buttons_layout = QtWidgets.QHBoxLayout(self)
+        buttons_layout = QtWidgets.QHBoxLayout()
 
         self.reader_path_button = QtWidgets.QPushButton("Choose reader path", self)
         self.reader_path_button.clicked.connect(self.on_reader_path_load)
@@ -153,7 +153,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         buttons_layout.addWidget(self.start_button)
         buttons_layout.addWidget(self.stop_button)
 
-        data_layout = QtWidgets.QFormLayout(self)
+        data_layout = QtWidgets.QFormLayout()
 
         self.status1 = QtWidgets.QLineEdit(self)
         self.status1.setDisabled(True)
