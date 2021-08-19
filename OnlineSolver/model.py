@@ -2,7 +2,8 @@ import pathlib
 import pickle
 
 import numpy as np
-from tensorflow.keras.models import model_from_json
+from keras.models import model_from_json
+from keras.layers.core import Dense
 
 CLASS_LIST = ["air", "laurel", "cinnamon"]
 
@@ -34,9 +35,9 @@ class Model(object):
     def __init__(self, modelPath: pathlib.Path):
         self.path = modelPath
         self.workable = False
-        self._LoadModel()
+        self._load_model()
 
-    def _LoadModel(self):
+    def _load_model(self):
         """Load the model, reading the needed files in folder"""
         # load scaler model
         with (self.path / 'scaler_x').open('rb') as f:
@@ -66,7 +67,7 @@ class Model(object):
         scaled_sample = self.scaler.transform([shape_data])
         return scaled_sample.reshape([1, 119, 1])
 
-    def Evaluate(self, vector: np.ndarray, threshold: float = 33.3) -> (str, np.ndarray):
+    def evaluate(self, vector: np.ndarray, threshold: float = 33.3) -> (str, np.ndarray):
         """ Takes the vector to define the answer
             Returns:
                 answer : string
@@ -81,5 +82,5 @@ class Model(object):
         return gas, np.array([])
 
 
-def CreateModels(models_paths):
+def create_models(models_paths):
     return [Model(model_path) for model_path in models_paths]

@@ -5,6 +5,7 @@ import pathlib
 import shutil
 import sys
 import threading
+import time
 import typing
 
 import numpy as np
@@ -89,24 +90,17 @@ class CalcThread(threading.Thread):
 
     def run(self):
         while not self.stopEvent.is_set():
+            time.sleep(1)
             if self.frame.file.set_file():
                 logger.debug('Got file')
+                self.frame.status.setText("Получен новый цикл из файла {}".format(self.frame.file.get_file_name()))
                 if self.data.take_data(self.frame.file.read_data()):
                     answers = []
-
-                    # model_vectors = []
-                    # for idx, model_ in enumerate(self.models):
-                    #     answer, vector = model_.Evaluate(self.data.get_(idx))
-                    #     answers.append(answer)
-                    #     model_vectors.append(vector)
-                    # answer, _ = self.model0.Evaluate(np.hstack(model_vectors))
-                    # self.frame.printResults(answers)
-
-                    answer, vector = self.model0.Evaluate(self.data.get_(0))
+                    answer, _ = self.model0.evaluate(self.data.get_(0))
                     answers.append(answer)
                     self.frame.print_results(answers)
 
-    def stopThread(self):
+    def stop_thread(self):
         self.stopEvent.set()
 
     def is_stopped(self):
@@ -154,7 +148,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
         buttons_layout = QtWidgets.QHBoxLayout()
 
-        self.reader_path_button = QtWidgets.QPushButton("Выберать путь до файлов", self)
+        self.reader_path_button = QtWidgets.QPushButton("Выбрать путь до файлов", self)
         self.reader_path_button.clicked.connect(self.on_reader_path_load)
 
         self.start_button = QtWidgets.QPushButton("Старт", self)
@@ -207,7 +201,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
     def on_stop(self):
         try:
-            self.worker.stopThread()
+            self.worker.stop_thread()
         except AttributeError:
             pass
 

@@ -1,5 +1,6 @@
 import os
 import time
+import pathlib
 
 import numpy as np
 
@@ -47,3 +48,6 @@ class FileReader:
 
     def get_data(self):
         return self.data
+
+    def get_file_name(self):
+        return pathlib.Path(self.file).name if self.file else ""

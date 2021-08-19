@@ -264,3 +264,4 @@ __pycache__/
 *.bin
 
 *.conf
+*.xcf
