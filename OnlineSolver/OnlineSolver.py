@@ -7,17 +7,23 @@ import sys
 import threading
 import typing
 
-import PySide2
 import numpy as np
-from PySide2 import QtWidgets, QtGui
+from PySide2 import QtWidgets, QtGui, QtCore
 from PySide2.QtWidgets import QFileDialog
 
 import functions
 import model
 
+
+gases_russian_names_map  = {
+    "air": "воздух",
+    "laurel": "лавр",
+    "cinnamon": "корица"
+}
 cwd = pathlib.Path().cwd()
 logs_folder = cwd / "logs"
 config_file = cwd / "config.conf"
+pictures_folder = cwd / "pictures"
 logs_folder.mkdir(exist_ok=True)
 logging_file_name = (logs_folder / datetime.datetime.now().strftime("%y%m%d_%H%M%S")).with_suffix(".log")
 logging.basicConfig(filename=logging_file_name.as_posix(),
@@ -107,6 +113,19 @@ class CalcThread(threading.Thread):
         return self.stopEvent.is_set()
 
 
+class PixmapLabel(QtWidgets.QLabel):
+    def __init__(self, parent=None):
+        super(PixmapLabel, self).__init__(parent=parent)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.setFixedSize(600, 600)
+        self.setFrameStyle(QtWidgets.QFrame.Sunken | QtWidgets.QFrame.Panel)
+        gases_names = ("air", "laurel", "cinnamon")
+        self.gas_name_mapping = dict(
+            zip(gases_names, (QtGui.QPixmap((pictures_folder / "{}.jpg".format(name)).as_posix()) for name in gases_names)))
+
+    def choose_picture(self, gas_name):
+        self.setPixmap(self.gas_name_mapping[gas_name])
+
 class CustomMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(CustomMainWindow, self).__init__()
@@ -135,28 +154,36 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
         buttons_layout = QtWidgets.QHBoxLayout()
 
-        self.reader_path_button = QtWidgets.QPushButton("Choose reader path", self)
+        self.reader_path_button = QtWidgets.QPushButton("Выберать путь до файлов", self)
         self.reader_path_button.clicked.connect(self.on_reader_path_load)
 
-        self.start_button = QtWidgets.QPushButton("Start", self)
+        self.start_button = QtWidgets.QPushButton("Старт", self)
         self.start_button.clicked.connect(self.on_start)
-        self.stop_button = QtWidgets.QPushButton("Stop", self)
+        self.stop_button = QtWidgets.QPushButton("Стоп", self)
         self.stop_button.clicked.connect(self.on_stop)
 
         buttons_layout.addWidget(self.reader_path_button)
         buttons_layout.addWidget(self.start_button)
         buttons_layout.addWidget(self.stop_button)
 
-        data_layout = QtWidgets.QFormLayout()
+        data_layout = QtWidgets.QVBoxLayout()
 
-        self.status1 = QtWidgets.QLineEdit(self)
-        self.status1.setDisabled(True)
+        self.status1 = QtWidgets.QLabel(self)
+        self.status1.setFont(QtGui.QFont("Dejavu Sans", 40))
+        self.status1.setAlignment(QtCore.Qt.AlignCenter)
         self.result_widgets = [self.status1]
 
-        data_layout.addRow("Flavor", self.status1)
+        data_layout.addWidget(self.status1)
+
+        picture_layout = QtWidgets.QVBoxLayout()
+
+        self.pixmap_label = PixmapLabel(self)
+
+        picture_layout.addWidget(self.pixmap_label)
 
         main_layout.addLayout(buttons_layout)
         main_layout.addLayout(data_layout)
+        main_layout.addLayout(picture_layout)
 
         self.show()
 
@@ -190,7 +217,9 @@ class CustomMainWindow(QtWidgets.QMainWindow):
 
     def print_results(self, answers: typing.Iterable):
         for answer, widget in zip(answers, self.result_widgets):
-            widget.setText(answer)
+            widget.setText(gases_russian_names_map[answer])
+
+        self.pixmap_label.choose_picture(answers[0])
 
     def on_reader_path_load(self):
         default_dict = self.config["DEFAULT"]
@@ -214,7 +243,6 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         else:
             for file in files_list:
                 shutil.move(file, new_folder_name / file.name)
-
 
 if __name__ == '__main__':
     # Main App
