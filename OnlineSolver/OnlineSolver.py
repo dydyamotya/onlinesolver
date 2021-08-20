@@ -75,13 +75,6 @@ class CalcThread(threading.Thread):
         Необходимо будет только каждую сетку раскидать по своим папкам.
         """
 
-        model_path = cwd / "model0"
-        # Models assignement
-        # 0 - concilium net
-        # models - sensors nets
-        # ==================================================
-        self.model0 = model.Model(model_path)
-        # ==================================================
         self.frame = frame
         self.daemon = True
         self.stopEvent = threading.Event()
@@ -89,6 +82,14 @@ class CalcThread(threading.Thread):
         self.start()
 
     def run(self):
+
+        model_path = cwd / "model0"
+        # Models assignement
+        # 0 - concilium net
+        # models - sensors nets
+        # ==================================================
+        self.model0 = model.Model(model_path)
+        # ==================================================
         while not self.stopEvent.is_set():
             time.sleep(1)
             if self.frame.file.set_file():
@@ -204,6 +205,10 @@ class CustomMainWindow(QtWidgets.QMainWindow):
             self.worker.stop_thread()
         except AttributeError:
             pass
+        else:
+            self.worker = None
+        finally:
+            self.status.setText("Work stopped.")
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.on_stop()

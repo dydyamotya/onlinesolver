@@ -2,8 +2,12 @@ import pathlib
 import pickle
 
 import numpy as np
-from keras.models import model_from_json
-from keras.layers.core import Dense
+from tensorflow.keras.models import model_from_json
+from tensorflow.keras.layers import Dense
+import tensorflow as tf
+import logging
+logger = logging.getLogger()
+
 
 CLASS_LIST = ["air", "laurel", "cinnamon"]
 
@@ -52,6 +56,7 @@ class Model(object):
 
         # load model weights
         self.model.load_weights((self.path / 'checkpoint').as_posix())
+        logger.debug(str(self.model.summary()))
 
     def sample_prepare(self, data_sample: np.ndarray):
         raw_data = data_sample
