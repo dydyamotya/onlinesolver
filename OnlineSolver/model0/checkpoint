@@ -1,2 +1,2 @@
-model_checkpoint_path: "big_checkpoint"
-all_model_checkpoint_paths: "big_checkpoint"
+model_checkpoint_path: "checkpoint"
+all_model_checkpoint_paths: "checkpoint"

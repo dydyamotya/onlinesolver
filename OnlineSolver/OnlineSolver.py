@@ -34,6 +34,8 @@ logging.basicConfig(filename=logging_file_name.as_posix(),
                     format='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger()
+stream_handler = logging.StreamHandler()
+logger.addHandler(stream_handler)
 
 
 def purify(string):

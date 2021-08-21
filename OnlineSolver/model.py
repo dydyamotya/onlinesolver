@@ -9,7 +9,8 @@ import logging
 logger = logging.getLogger()
 
 
-CLASS_LIST = ["air", "laurel", "cinnamon"]
+SASHA_CLASS_LIST = ["air", "laurel", "cinnamon"]
+CLASS_LIST = ["cinnamon", "laurel", "air"]
 
 
 def bookstein(x, first_idx=1020, last_idx=2040):
@@ -29,6 +30,16 @@ def aggregator(x, wndw=5):
     arr_tmp = np.array([np.median(x[:, i - wndw:i], axis=1) for i in range(wndw, x.shape[1], wndw)]).T
     return arr_tmp
 
+def filter_output(vector):
+    """Classes: air, laurel, cinnamon"""
+    a, l, c = vector
+    if c > 0.4:
+        return 2
+    else:
+        if c > 0.02:
+            return 1
+        else:
+            return 0
 
 class Model(object):
     """
@@ -55,8 +66,11 @@ class Model(object):
             json_file.close()
 
         # load model weights
-        self.model.load_weights((self.path / 'checkpoint').as_posix())
-        logger.debug(str(self.model.summary()))
+
+        with (self.path / "weights.pkl").open('rb') as fd:
+            weights = pickle.load(fd)
+            self.model.set_weights(weights)
+        # self.model.load_weights((self.path / 'checkpoint').as_posix())
 
     def sample_prepare(self, data_sample: np.ndarray):
         raw_data = data_sample
@@ -82,8 +96,11 @@ class Model(object):
         vector = vector.transpose()
         vector = vector[:, :598]
         input_sample = self.sample_prepare(vector)
-        pred_index, = self.model.predict_classes(input_sample)
-        gas = CLASS_LIST[pred_index]
+        prediction = self.model.predict(input_sample)
+        logger.debug(str(prediction))
+        # pred_index, = np.argmax(prediction, axis=-1)
+        pred_index = filter_output(prediction)
+        gas = SASHA_CLASS_LIST[pred_index]
         return gas, np.array([])
 
 
