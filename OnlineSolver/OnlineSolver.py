@@ -15,7 +15,9 @@ from PySide2.QtWidgets import QFileDialog
 import functions
 import model
 
+from pymodbus.client.sync import ModbusSerialClient
 
+SLAVE_ID = 11
 gases_russian_names_map  = {
     "air": "воздух",
     "laurel": "лавр",
@@ -66,6 +68,40 @@ class Data():
     def get_(self, sens_num):
         return self.data[sens_num]
 
+
+class ModbusThread(threading.Thread):
+    def __init__(self, modbus_port, frame):
+        super(ModbusThread, self).__init__()
+
+        self.frame = frame
+
+        self.daemon = True
+        self.stopEvent = threading.Event()
+
+        self.modbus_serial = ModbusSerialClient(method="rtu", port=modbus_port, baudrate=19200)
+        self.start()
+
+    def run(self):
+        while not self.stopEvent.is_set():
+            time.sleep(1)
+            try:
+                coils = self.modbus_serial.read_coils(0x0000, count=4, unit=SLAVE_ID).coils
+                self.frame.print_gasstatus(str(self.transform_to_gas_number(coils)))
+            except Exception as e:
+                self.stop_thread(message=str(e))
+            else:
+                logger.info("{}".format(self.transform_to_gas_number(coils)))
+
+    def stop_thread(self, message="Modbus stopped"):
+        self.stopEvent.set()
+        self.frame.notice_stop_modbus(message)
+
+    def is_stopped(self):
+        return self.stopEvent.is_set()
+
+    @staticmethod
+    def transform_to_gas_number(values):
+        return values.index(True)
 
 class CalcThread(threading.Thread):
     def __init__(self, frame):
@@ -135,6 +171,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         self.read_config()
 
         self.worker = None
+        self.modbus_worker = None
 
         self.status = self.statusBar()
         self.status.setText = self.status.showMessage
@@ -154,23 +191,69 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         self.reader_path_button = QtWidgets.QPushButton("Выбрать путь до файлов", self)
         self.reader_path_button.clicked.connect(self.on_reader_path_load)
 
+        neuro_buttons_with_label_layout = QtWidgets.QVBoxLayout()
+
+        neuro_buttons_with_label_layout.addWidget(QtWidgets.QLabel("Нейросеть", self))
+
+        neuro_buttons_layout = QtWidgets.QHBoxLayout()
+
+
         self.start_button = QtWidgets.QPushButton("Старт", self)
         self.start_button.clicked.connect(self.on_start)
         self.stop_button = QtWidgets.QPushButton("Стоп", self)
         self.stop_button.clicked.connect(self.on_stop)
 
+        neuro_buttons_layout.addWidget(self.start_button)
+        neuro_buttons_layout.addWidget(self.stop_button)
+
+        neuro_buttons_with_label_layout.addLayout(neuro_buttons_layout)
+
+        modbus_buttons_with_label_layout = QtWidgets.QVBoxLayout()
+
+        modbus_label_lineedit_layout = QtWidgets.QHBoxLayout()
+
+        modbus_label_lineedit_layout.addWidget(QtWidgets.QLabel("Газ", self))
+        self.modbus_port_lineedit = QtWidgets.QLineEdit(self)
+        modbus_label_lineedit_layout.addWidget(self.modbus_port_lineedit)
+
+        modbus_buttons_with_label_layout.addLayout(modbus_label_lineedit_layout)
+
+
+        modbus_buttons_layout = QtWidgets.QHBoxLayout()
+
+        self.start_modbus_button = QtWidgets.QPushButton("Старт", self)
+        self.start_modbus_button.clicked.connect(self.on_modbus_start)
+        self.stop_modbus_button = QtWidgets.QPushButton("Стоп", self)
+        self.stop_modbus_button.clicked.connect(self.on_modbus_stop)
+
+        modbus_buttons_layout.addWidget(self.start_modbus_button)
+        modbus_buttons_layout.addWidget(self.stop_modbus_button)
+
+        modbus_buttons_with_label_layout.addLayout(modbus_buttons_layout)
+
         buttons_layout.addWidget(self.reader_path_button)
-        buttons_layout.addWidget(self.start_button)
-        buttons_layout.addWidget(self.stop_button)
+        buttons_layout.addLayout(neuro_buttons_with_label_layout)
+        buttons_layout.addLayout(modbus_buttons_with_label_layout)
 
         data_layout = QtWidgets.QVBoxLayout()
+
+        stati_layout = QtWidgets.QHBoxLayout()
 
         self.status1 = QtWidgets.QLabel(self)
         self.status1.setFont(QtGui.QFont("Dejavu Sans", 40))
         self.status1.setAlignment(QtCore.Qt.AlignCenter)
         self.result_widgets = [self.status1]
 
-        data_layout.addWidget(self.status1)
+        stati_layout.addWidget(self.status1)
+
+        self.gasstatus = QtWidgets.QLabel(self)
+        self.gasstatus.setFont(QtGui.QFont("Dejavu Sans", 40))
+        self.gasstatus.setAlignment(QtCore.Qt.AlignCenter)
+        self.gasstatus.setFixedWidth(50)
+
+        stati_layout.addWidget(self.gasstatus)
+
+        data_layout.addLayout(stati_layout)
 
         picture_layout = QtWidgets.QVBoxLayout()
 
@@ -212,6 +295,21 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         finally:
             self.status.setText("Work stopped.")
 
+    def on_modbus_start(self):
+        if self.modbus_worker:
+            self.status.setText("Modbus worker already there.")
+        if not self.modbus_worker:
+            self.worker = ModbusThread(self.modbus_port_lineedit.text(), self)
+
+    def on_modbus_stop(self):
+        try:
+            self.modbus_worker.stop_thread()
+        except AttributeError:
+            pass
+        else:
+            self.modbus_worker = None
+
+
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.on_stop()
         super(CustomMainWindow, self).closeEvent(event)
@@ -244,6 +342,13 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         else:
             for file in files_list:
                 shutil.move(file, new_folder_name / file.name)
+
+    def notice_stop_modbus(self, message):
+        self.status.setText(message)
+        self.modbus_worker = None
+
+    def print_gasstatus(self, message):
+        self.gasstatus.setText(message)
 
 if __name__ == '__main__':
     # Main App
