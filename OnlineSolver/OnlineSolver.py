@@ -31,7 +31,7 @@ logs_folder.mkdir(exist_ok=True)
 logging_file_name = (logs_folder / datetime.datetime.now().strftime("%y%m%d_%H%M%S")).with_suffix(".log")
 logging.basicConfig(filename=logging_file_name.as_posix(),
                     filemode='w',
-                    level=logging.DEBUG,
+                    level=logging.INFO,
                     datefmt="%y%m%d_%H:%M:%S",
                     format='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s')
 
@@ -85,7 +85,7 @@ class ModbusThread(threading.Thread):
         while not self.stopEvent.is_set():
             time.sleep(1)
             try:
-                coils = self.modbus_serial.read_coils(0x0000, count=4, unit=SLAVE_ID).coils
+                coils = self.modbus_serial.read_coils(0x0000, count=4, unit=SLAVE_ID).bits[:4]
                 self.frame.print_gasstatus(str(self.transform_to_gas_number(coils)))
             except Exception as e:
                 self.stop_thread(message=str(e))
@@ -299,7 +299,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         if self.modbus_worker:
             self.status.setText("Modbus worker already there.")
         if not self.modbus_worker:
-            self.worker = ModbusThread(self.modbus_port_lineedit.text(), self)
+            self.modbus_worker = ModbusThread(self.modbus_port_lineedit.text(), self)
 
     def on_modbus_stop(self):
         try:
