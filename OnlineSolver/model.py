@@ -96,7 +96,7 @@ class Model(object):
         vector = vector.transpose()
         vector = vector[:, :598]
         input_sample = self.sample_prepare(vector)
-        prediction = self.model.predict(input_sample)
+        prediction, = self.model.predict(input_sample)
         logger.info(str(prediction))
         # pred_index, = np.argmax(prediction, axis=-1)
         pred_index = filter_output(prediction)

@@ -31,12 +31,13 @@ logs_folder.mkdir(exist_ok=True)
 logging_file_name = (logs_folder / datetime.datetime.now().strftime("%y%m%d_%H%M%S")).with_suffix(".log")
 logging.basicConfig(filename=logging_file_name.as_posix(),
                     filemode='w',
-                    level=logging.INFO,
+                    level=logging.DEBUG,
                     datefmt="%y%m%d_%H:%M:%S",
                     format='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger()
 stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
 logger.addHandler(stream_handler)
 
 
@@ -83,7 +84,7 @@ class ModbusThread(threading.Thread):
 
     def run(self):
         while not self.stopEvent.is_set():
-            time.sleep(1)
+            time.sleep(10)
             try:
                 coils = self.modbus_serial.read_coils(0x0000, count=4, unit=SLAVE_ID).bits[:4]
                 self.frame.print_gasstatus(str(self.transform_to_gas_number(coils)))
