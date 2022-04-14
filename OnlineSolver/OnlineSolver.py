@@ -71,7 +71,7 @@ class Data():
 
 
 class ModbusThread(threading.Thread):
-    def __init__(self, modbus_port, frame):
+    def __init__(self, modbus_port, frame, timeout=10):
         super(ModbusThread, self).__init__()
 
         self.frame = frame
@@ -79,12 +79,14 @@ class ModbusThread(threading.Thread):
         self.daemon = True
         self.stopEvent = threading.Event()
 
-        self.modbus_serial = ModbusSerialClient(method="rtu", port=modbus_port, baudrate=19200)
+        self.timeout = timeout
+
+        self.modbus_serial = ModbusSerialClient(method="rtu", port=modbus_port, baudrate=19200, timeout=self.timeout)
         self.start()
 
     def run(self):
         while not self.stopEvent.is_set():
-            time.sleep(10)
+            time.sleep(self.timeout)
             try:
                 coils = self.modbus_serial.read_coils(0x0000, count=4, unit=SLAVE_ID).bits[:4]
                 self.frame.print_gasstatus(str(self.transform_to_gas_number(coils)))

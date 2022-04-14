@@ -2,15 +2,14 @@ import pathlib
 import pickle
 
 import numpy as np
-from tensorflow.keras.models import model_from_json
+from tensorflow.keras.models import model_from_json, load_model
 from tensorflow.keras.layers import Dense
 import tensorflow as tf
 import logging
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
-SASHA_CLASS_LIST = ["air", "laurel", "cinnamon"]
-CLASS_LIST = ["cinnamon", "laurel", "air"]
+CLASS_LIST = ["air", "basil", "jasmin"]
 
 
 def bookstein(x, first_idx=1020, last_idx=2040):
@@ -18,7 +17,7 @@ def bookstein(x, first_idx=1020, last_idx=2040):
     nj = x.shape[0]
     j = np.ones(nj)
     w = (x[:, 0] + (1j) * x[:, 1] - (j * (x[first_idx, 0] + (1j) * x[first_idx, 1]))) / (
-            x[last_idx, 0] + (1j) * x[last_idx, 1] - x[first_idx, 0] - (1j) * x[first_idx, 1]) - 0.5
+        x[last_idx, 0] + (1j) * x[last_idx, 1] - x[first_idx, 0] - (1j) * x[first_idx, 1]) - 0.5
     w = w[0:nj]
     y = np.real(w)
     z = np.imag(w)
@@ -27,8 +26,10 @@ def bookstein(x, first_idx=1020, last_idx=2040):
 
 
 def aggregator(x, wndw=5):
-    arr_tmp = np.array([np.median(x[:, i - wndw:i], axis=1) for i in range(wndw, x.shape[1], wndw)]).T
+    arr_tmp = np.array([np.median(x[:, i - wndw:i], axis=1)
+                       for i in range(wndw, x.shape[1], wndw)]).T
     return arr_tmp
+
 
 def filter_output(vector):
     """Classes: air, laurel, cinnamon"""
@@ -40,6 +41,7 @@ def filter_output(vector):
             return 1
         else:
             return 0
+
 
 class Model(object):
     """
@@ -59,17 +61,19 @@ class Model(object):
             self.scaler = pickle.load(f)
             f.close()
 
+        self.model = load_model(self.path / "model.hdf5")
+
         # load neural net model
-        with (self.path / 'model.json').open('r') as json_file:
-            loaded_model_json = json_file.read()
-            self.model = model_from_json(loaded_model_json)
-            json_file.close()
-
-        # load model weights
-
-        with (self.path / "weights.pkl").open('rb') as fd:
-            weights = pickle.load(fd)
-            self.model.set_weights(weights)
+        # with (self.path / 'model.json').open('r') as json_file:
+        #     loaded_model_json = json_file.read()
+        #     self.model = model_from_json(loaded_model_json)
+        #     json_file.close()
+        #
+        # # load model weights
+        #
+        # with (self.path / "weights.pkl").open('rb') as fd:
+        #     weights = pickle.load(fd)
+        #     self.model.set_weights(weights)
         # self.model.load_weights((self.path / 'checkpoint').as_posix())
 
     def sample_prepare(self, data_sample: np.ndarray):
@@ -81,10 +85,11 @@ class Model(object):
             Step 2: bookstein mapping
             Step 3: MinMax scaling
             Step 4: reshape for conv1d input layer'''
-        data_smoothed = aggregator(np.array([np.log10(raw_data[1]), raw_data[0] / 50]), 5)
+        data_smoothed = aggregator(
+            np.array([np.log10(raw_data[1]), raw_data[0] / 50]), 5)
         shape_data = bookstein(data_smoothed.transpose(), 60, 90)[1]
         scaled_sample = self.scaler.transform([shape_data])
-        return scaled_sample.reshape([1, 119, 1])
+        return scaled_sample.reshape([1, 519, 1])
 
     def evaluate(self, vector: np.ndarray, threshold: float = 33.3) -> (str, np.ndarray):
         """ Takes the vector to define the answer
@@ -94,13 +99,12 @@ class Model(object):
             """
         # model evaluation
         vector = vector.transpose()
-        vector = vector[:, :598]
         input_sample = self.sample_prepare(vector)
         prediction, = self.model.predict(input_sample)
         logger.info(str(prediction))
-        # pred_index, = np.argmax(prediction, axis=-1)
-        pred_index = filter_output(prediction)
-        gas = SASHA_CLASS_LIST[pred_index]
+        pred_index, = np.argmax(prediction, axis=-1)
+        # pred_index = filter_output(prediction)
+        gas = CLASS_LIST[pred_index]
         return gas, np.array([])
 
 
