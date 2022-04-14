@@ -102,7 +102,7 @@ class Model(object):
         input_sample = self.sample_prepare(vector)
         prediction, = self.model.predict(input_sample)
         logger.info(str(prediction))
-        pred_index, = np.argmax(prediction, axis=-1)
+        pred_index = np.argmax(prediction, axis=-1)
         # pred_index = filter_output(prediction)
         gas = CLASS_LIST[pred_index]
         return gas, np.array([])

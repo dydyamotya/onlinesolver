@@ -20,8 +20,8 @@ from pymodbus.client.sync import ModbusSerialClient
 SLAVE_ID = 11
 gases_russian_names_map  = {
     "air": "воздух",
-    "laurel": "лавр",
-    "cinnamon": "корица"
+    "basil": "базилик",
+    "jasmin": "жасмин"
 }
 cwd = pathlib.Path().cwd()
 logs_folder = cwd / "logs"
@@ -155,7 +155,7 @@ class PixmapLabel(QtWidgets.QLabel):
         self.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         self.setFixedSize(600, 600)
         self.setFrameStyle(QtWidgets.QFrame.Sunken | QtWidgets.QFrame.Panel)
-        gases_names = ("air", "laurel", "cinnamon")
+        gases_names = ("air", "basil", "jasmin")
         self.gas_name_mapping = dict(
             zip(gases_names, (QtGui.QPixmap((pictures_folder / "{}.jpg".format(name)).as_posix()) for name in gases_names)))
 
@@ -317,7 +317,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
         self.on_stop()
         super(CustomMainWindow, self).closeEvent(event)
 
-    def print_results(self, answers: typing.Iterable):
+    def print_results(self, answers: typing.Collection):
         for answer, widget in zip(answers, self.result_widgets):
             widget.setText(gases_russian_names_map[answer])
 
