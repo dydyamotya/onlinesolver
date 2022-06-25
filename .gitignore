@@ -261,8 +261,6 @@ __pycache__/
 *.pyc
 *.txt
 
-*.bin
-
 *.conf
 *.xcf
 
