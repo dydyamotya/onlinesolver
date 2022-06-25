@@ -270,4 +270,6 @@ venv/
 venv38/
 venv39/
 
-temp*
+temp*.txt
+temp_binary_files_2
+temp_binary_examples
