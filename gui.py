@@ -175,7 +175,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
                 self.copy_files_on_start()
             self.file = functions.FileReader(self.reader_path)
             self.status.setText("Waiting for results.")
-            self.worker = CalcThread(self, self.cwd, "model0")
+            self.worker = CalcThread(self, self.cwd, "model_motya")
 
     def on_stop(self):
         try:

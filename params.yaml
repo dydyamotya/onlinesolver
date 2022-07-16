@@ -1,0 +1,10 @@
+prepare:
+  datetime-num: 7
+  seed: 21412312
+featurize:
+  window-size: 601
+  window-shift: 0
+  bit-depth:
+  r4:
+train:
+  epochs: 200
