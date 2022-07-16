@@ -140,7 +140,7 @@ class Model(object):
         with (self.path / 'StandartScaler.pkl').open('rb') as f:
             self.scaler = pickle.load(f)
 
-        self.model = load_model(self.path / "model.pkl")
+        self.model = load_model(self.path / "motya_model.h5")
 
     def sample_prepare(self, data_sample: np.ndarray):
         if data_sample.shape[1] == 600:
