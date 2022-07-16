@@ -229,7 +229,7 @@ class CustomMainWindow(QtWidgets.QMainWindow):
     def copy_files_on_start(self):
         reader_path_pathlib = pathlib.Path(self.reader_path)
         files_list = reader_path_pathlib.iterdir()
-        start_time = datetime.datetime.now().isoformat()
+        start_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         new_folder_name = reader_path_pathlib.parent / start_time
         try:
             new_folder_name.mkdir()
